@@ -9,6 +9,7 @@ from argus.agents.feasibility import FeasibilityAgent, FeasibilityScore
 from argus.agents.impact import ImpactAgent, ImpactScore
 from argus.agents.novelty import NoveltyAgent, NoveltyAssessment
 from argus.rag.engine import RAGEngine, EvidenceItem, EvidenceGroup
+from argus.rag.qdrant_engine import QdrantRAGEngine
 from argus.evidence.sources import Source, EvidenceRecord, Citation, EvidenceManager
 from argus.memory.postgres_memory import MemoryBackend, get_memory_backend
 from argus.orchestration.graph import InvestigationState, Orchestrator
@@ -44,7 +45,6 @@ __all__ = [
     "Citation",
     "EvidenceManager",
     "MemoryBackend",
-    "PostgresMemoryBackend",
     "get_memory_backend",
     "InvestigationState",
     "Orchestrator",

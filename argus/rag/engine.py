@@ -32,7 +32,10 @@ class EvidenceGroup(BaseModel):
     supporting: List[EvidenceItem] = Field(default_factory=list)
     contradicting: List[EvidenceItem] = Field(default_factory=list)
     neutral: List[EvidenceItem] = Field(default_factory=list)
-    overall_assessment: str = Field(description="Net assessment: supports, contradicts, or mixed")
+    overall_assessment: str = Field(
+        default="unknown",
+        description="Net assessment: supports, contradicts, or mixed"
+    )
 
 
 class RAGEngine:

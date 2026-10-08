@@ -1,38 +1,35 @@
 # ARGUS - Core Dependencies
 
 # FastAPI backend
-fastapi
-uvicorn[standard]
-pydantic[email]
+fastapi==0.115.0
+uvicorn[standard]==0.32.1
+pydantic[email]==2.10.3
+pydantic-settings==2.7.1
 
 # RAG & Vector Database
-qdrant_client
-qdrant-fastapi
-psycopg2-binary
-sqlalchemy
+qdrant-client==1.13.2
+# psycopg2-binary==2.9.10  # Requires system libpq-dev
+sqlalchemy==2.0.36
 
-# AI / Reasoning
-# Nemotron via Nebius - use open-source nemotron model or nebius SDK
-# requests for API calls
+# AI / Reasoning - Nemotron via Nebius
+requests==2.32.3
 
 # Embeddings
-sentence-transformers
-bge-m3  # or comparable BGE family
+sentence-transformers==3.4.1
 
 # Document Processing
-pymupdf  # PyMuPDF
-unstructured  # for complex documents
+pymupdf==1.25.3
+unstructured==0.18.32
 
 # Web Research
-tavily-python
-
-# Frontend (if using this repo as full stack)
-# React dependencies managed separately
+tavily-python==0.5.1
 
 # Utilities
-python-dotenv
-rich
-openai  # for LLM fallback / comparisons
+python-dotenv==1.0.1
+rich==13.9.4
+openai==1.58.1
 
-# Optional: Agent orchestration
-# langgraph  # if choosing framework approach
+# Testing
+pytest==8.3.4
+pytest-asyncio==0.24.0
+httpx==0.28.1

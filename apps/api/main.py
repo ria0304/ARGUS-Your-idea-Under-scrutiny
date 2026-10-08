@@ -19,7 +19,8 @@ from argus.agents.stress_test import StressTestAgent, StressTestResult, Breakpoi
 from argus.agents.feasibility import FeasibilityAgent, FeasibilityScore
 from argus.agents.impact import ImpactAgent, ImpactScore
 from argus.agents.novelty import NoveltyAgent, NoveltyAssessment
-from argus.rag.engine import RAGEngine, EvidenceItem, EvidenceGroup
+from argus.rag.qdrant_engine import QdrantRAGEngine
+from argus.rag.engine import EvidenceItem, EvidenceGroup
 from argus.evidence.sources import Source, EvidenceRecord, Citation, EvidenceManager
 from argus.memory.postgres_memory import MemoryBackend, get_memory_backend
 from argus.orchestration.graph import Orchestrator
@@ -40,17 +41,17 @@ except ImportError:
 
 # Initialize components
 intake_agent = IntakeAgent()
-literature_agent = LiteratureAgent()
+rag_engine = QdrantRAGEngine()  # Qdrant RAG engine
+literature_agent = LiteratureAgent(rag_engine=rag_engine)
 gap_agent = GapAgent()
-# ContradictionAgent requires evidence_store and rag_engine
-contradiction_agent = ContradictionAgent(evidence_store={}, rag_engine=None)
+evidence_manager = EvidenceManager()
+contradiction_agent = ContradictionAgent(evidence_store=evidence_manager, rag_engine=rag_engine)
 feasibility_agent = FeasibilityAgent()
 impact_agent = ImpactAgent()
 novelty_agent = NoveltyAgent()
-rag_engine = RAGEngine()  # RAG engine
-evidence_manager = EvidenceManager()
 memory_backend = get_memory_backend()  # PostgreSQL/SQLite backend
 orchestrator = Orchestrator()
+stress_agent = StressTestAgent(rag_engine=rag_engine, evidence_store=evidence_manager)
 
 app = FastAPI(
     title="ARGUS API",
@@ -60,8 +61,8 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -122,38 +123,28 @@ async def investigate(request: InvestigateRequest):
         # Phase 1: Intake - Understand and extract
         extracted = intake_agent.extract(request.idea)
         
-        # Phase 2: Literature - Find relevant work
-        from argus.agents.literature import LiteratureAgent
-        literature_agent = LiteratureAgent()
+        # Phase 2: Literature - Find relevant work (use global literature_agent with rag_engine)
         landscape = literature_agent.build_landscape(request.idea)
         
         # Phase 3: Gap analysis
         gap_analysis = gap_agent.analyze(
             user_idea=request.idea,
-            existing_papers=[{"title": p.title, "abstract": p.abstract} 
+            existing_papers=[{"title": p.title, "abstract": p.abstract, "topics": p.topics} 
                            for p in landscape.papers]
         )
         
         # Phase 4: Novelty assessment
-        from argus.agents.novelty import NoveltyAgent
-        novelty_agent = NoveltyAgent()
         novelty = novelty_agent.assess(
             user_idea=request.idea,
             existing_work=landscape.related_work
         )
         
-        # Phase 5: Evidence retrieval
-        from argus.rag.engine import RAGEngine
-        rag_engine = RAGEngine()
-        evidence_group = rag_engine.retrieve_for_claim(
-            extracted.claims[0].text if extracted.claims else request.idea
-        )
+        # Phase 5: Evidence retrieval (use global rag_engine)
+        claim_text = extracted.claims[0].text if extracted.claims else request.idea
+        evidence_group = rag_engine.retrieve_for_claim(claim_text)
         
         # Phase 6: Contradiction analysis
-        contradictions = contradiction_agent.search_contradictions(
-            request.idea, 
-            {"evidence": evidence_group}
-        )
+        contradictions = contradiction_agent.search_contradictions(claim_text)
         
         # Phase 7: Feasibility assessment
         feasibility = feasibility_agent.assess(
@@ -167,30 +158,24 @@ async def investigate(request: InvestigateRequest):
             domain=extracted.domain if extracted else "unknown"
         )
         
-        # Phase 9: Stress test and breakpoint detection
-        from argus.agents.stress_test import StressTestAgent
-        stress_agent = StressTestAgent()
+        # Phase 9: Stress test and breakpoint detection (use global stress_agent)
         stress_result = stress_agent.stress_test(
             assumptions=extracted.assumptions if extracted else [],
             evidence_store={"evidence": evidence_group}
         )
         
         # Phase 10: Generate action plan
-        from argus.orchestration.graph import Orchestrator
-        orchestrator = Orchestrator()
         action_plan = orchestrator._generate_default_action_plan()
         
         processing_time = time.time() - start_time
         
-        # Build dashboard data
-        dashboard_data = {
-            "novelty": novelty.novelty_score * 10 if novelty else 5.0,
-            "evidence": min(len(evidence_group.supporting) * 2 + 3, 10.0) if evidence_group else 3.0,
-            "feasibility": feasibility.overall_score * 10 if feasibility else 5.0,
-            "impact": impact.overall_score if impact else 5.0,
-            "gap": gap_analysis.gap_confidence * 10 if gap_analysis else 5.0,
-            "breakpoint": max(0, min(10, str(stress_result.overall_assessment).count("CRITICAL") * 3 + str(stress_result.overall_assessment).count("HIGH") * 2 + 3))
-        }
+        # Build dashboard data (normalize all scores to 0-100)
+        novelty_score = min(max(novelty.novelty_score if novelty else 50.0, 0), 100)
+        evidence_score = min(max((len(evidence_group.supporting) * 8 + len(evidence_group.neutral) * 3) if evidence_group else 30.0, 0), 100)
+        feasibility_score = min(max(feasibility.overall_score * 100 if feasibility else 50.0, 0), 100)
+        impact_score = min(max(impact.overall_score * 10 if impact else 50.0, 0), 100)
+        gap_score = min(max(gap_analysis.gap_confidence * 100 if gap_analysis else 50.0, 0), 100)
+        breakpoint_score = min(max(str(stress_result.overall_assessment).count("CRITICAL") * 25 + str(stress_result.overall_assessment).count("HIGH") * 15 + 30, 0), 100)
         
         response_data = {
             "investigation_id": investigation_id,
@@ -212,7 +197,7 @@ async def investigate(request: InvestigateRequest):
                 "gap_confidence": gap_analysis.gap_confidence if gap_analysis else 0.0
             },
             "novelty": {
-                "score": novelty.novelty_score * 100 if novelty else 50.0,
+                "score": min(max(novelty.novelty_score if novelty else 50.0, 0), 100),
                 "differentiators": novelty.differentiators if novelty else [],
                 "risk": novelty.novelty_risk if novelty else "unknown"
             },
@@ -227,12 +212,12 @@ async def investigate(request: InvestigateRequest):
                 for c in contradictions[:5]
             ],
             "feasibility": {
-                "score": feasibility.overall_score * 10 if feasibility else 5.0,
+                "score": min(max(feasibility.overall_score * 100 if feasibility else 50.0, 0), 100),
                 "bottlenecks": feasibility.bottlenecks if feasibility else [],
                 "verdict": feasibility.verdict if feasibility else "unknown"
             },
             "impact": {
-                "score": impact.overall_score if impact else 5.0,
+                "score": min(max(impact.overall_score * 10 if impact else 50.0, 0), 100),
                 "beneficiaries": impact.key_beneficiaries if impact else [],
                 "recommendation": impact.recommendation if impact else "moderate"
             },
@@ -269,10 +254,10 @@ async def break_it(request: InvestigateRequest):
     try:
         extracted = intake_agent.extract(request.idea)
         
-        stress_agent = StressTestAgent()
+        evidence_group = rag_engine.retrieve_for_claim(request.idea)
         stress_result = stress_agent.stress_test(
             assumptions=extracted.assumptions if extracted else [],
-            evidence_store={"evidence": rag_engine.retrieve_for_claim(request.idea)}
+            evidence_store={"evidence": evidence_group}
         )
         
         investigation_id = f"inv_{hashlib.md5(request.idea.encode()).hexdigest()[:8]}"
@@ -282,8 +267,9 @@ async def break_it(request: InvestigateRequest):
             mode="break",
             status="complete",
             message="ARGUS break-it analysis complete - weaknesses identified",
-            data={**{"breakpoints": [{"id": bp.breakpoint_id, "assumption": bp.assumption, "severity": bp.severity} for bp in stress_result.breakpoints]}, 
-                  "overall_assessment": stress_result.overall_assessment}
+            data={"breakpoints": [{"id": bp.breakpoint_id, "assumption": bp.assumption, "severity": bp.severity} for bp in stress_result.breakpoints],
+                  "overall_assessment": stress_result.overall_assessment,
+                  "scenarios_tested": len(stress_result.scenarios)}
         )
     except Exception as e:
         import traceback
@@ -334,6 +320,26 @@ async def mirror(request: InvestigateRequest):
             message="ARGUS mirror analysis complete",
             data={"scenarios": scenarios, "message": "Counterfactual scenarios generated"}
         )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/dashboard")
+async def dashboard():
+    """Get dashboard metrics."""
+    try:
+        projects = memory_backend.get_all_projects()
+        return {
+            "novelty": 50.0,
+            "evidence": 50.0,
+            "feasibility": 50.0,
+            "impact": 50.0,
+            "gap": 50.0,
+            "breakpoint": 50.0,
+            "total_projects": len(projects)
+        }
     except Exception as e:
         import traceback
         traceback.print_exc()

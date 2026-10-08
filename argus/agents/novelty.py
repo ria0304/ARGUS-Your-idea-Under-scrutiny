@@ -53,9 +53,17 @@ class NoveltyAgent:
         overlaps = []
         total_overlap = 0
         
-        for paper in existing_work:
-            paper_topics = paper.get("topics", [])
-            paper_title = paper.get("title", "")
+        for work in existing_work:
+            # Handle both dict and RelatedWork objects
+            if hasattr(work, 'paper'):
+                # RelatedWork object
+                paper = work.paper
+                paper_topics = paper.topics
+                paper_title = paper.title
+            else:
+                # Dict
+                paper_topics = work.get("topics", [])
+                paper_title = work.get("title", "")
             
             # Calculate overlap based on topic intersection
             intersection = len(set(user_topics) & set(paper_topics))

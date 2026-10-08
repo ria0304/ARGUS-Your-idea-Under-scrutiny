@@ -4,6 +4,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from pydantic import BaseModel, Field
 import numpy as np
 
+from argus.rag.engine import EvidenceGroup, EvidenceItem
+
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.models import (
@@ -21,6 +23,25 @@ except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False
 
 
+# Module-level singleton for embedding model to avoid reloading
+_embedding_model_cache = {}
+
+def get_embedding_model(model_name: str = "all-MiniLM-L6-v2"):
+    """Get or create embedding model singleton."""
+    if model_name not in _embedding_model_cache:
+        if SENTENCE_TRANSFORMERS_AVAILABLE:
+            try:
+                _embedding_model_cache[model_name] = SentenceTransformer(model_name)
+            except Exception as e:
+                print(f"Failed to load {model_name}: {e}")
+                if model_name != "all-MiniLM-L6-v2":
+                    return get_embedding_model("all-MiniLM-L6-v2")
+                _embedding_model_cache[model_name] = None
+        else:
+            _embedding_model_cache[model_name] = None
+    return _embedding_model_cache[model_name]
+
+
 class QdrantRAGEngine:
     """RAG engine using Qdrant vector database with BGE embeddings."""
     
@@ -28,7 +49,7 @@ class QdrantRAGEngine:
         self, 
         qdrant_url: str = "localhost:6333", 
         qdrant_api_key: Optional[str] = None,
-        embedding_model: str = "BAAI/bge-m3",
+        embedding_model: str = "all-MiniLM-L6-v2",
         collection_name: str = "argus_evidence"
     ):
         self.collection_name = collection_name
@@ -42,15 +63,12 @@ class QdrantRAGEngine:
                     api_key=qdrant_api_key
                 )
             else:
-                self.client = QdrantClient(url=qdrant_url)
+                self.client = QdrantClient(url=qdrant_url, check_compatibility=False)
         else:
             self.client = None
         
-        # Initialize embedding model
-        if SENTENCE_TRANSFORMERS_AVAILABLE:
-            self.embedding_model = SentenceTransformer(embedding_model)
-        else:
-            self.embedding_model = None
+        # Get embedding model from cache
+        self.embedding_model = get_embedding_model(embedding_model)
         
         # Initialize collection if it doesn't exist
         self._init_collection()
@@ -127,19 +145,21 @@ class QdrantRAGEngine:
             payloads.append(payload)
         
         # Create points
+        points = []
         for i, (vector, payload) in enumerate(zip(vectors, payloads)):
             point = PointStruct(
                 id=i,
                 vector=vector.tolist(),
                 payload=payload
             )
+            points.append(point)
             point_ids.append(point.id)
         
         # Upload to Qdrant
         try:
             self.client.upsert(
                 collection_name=self.collection_name,
-                points=point_ids  # Actually need PointStruct objects
+                points=points
             )
             print(f"Stored {len(point_ids)} evidence items in Qdrant")
             return [str(pid) for pid in point_ids]
@@ -166,7 +186,7 @@ class QdrantRAGEngine:
                 collection_name=self.collection_name,
                 query_vector=query_embedding,
                 limit=top_k,
-                filter=self._build_filter(filter_metadata) if filter_metadata else None
+                query_filter=self._build_filter(filter_metadata) if filter_metadata else None
             )
             
             # Convert to result dicts
