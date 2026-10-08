@@ -154,7 +154,8 @@ def _mock_nemotron_response(messages: List[Dict[str, str]]) -> Dict[str, Any]:
         }
     
     # Contradiction Agent
-    if "contradict" in last_user_msg.lower() or "counterevidence" in last_user_msg.lower():
+    if ("contradict" in last_user_msg.lower() or "counterevidence" in last_user_msg.lower() or 
+        ("search" in last_user_msg.lower() and "contradiction" in system_msg.lower())):
         return {
             "content": json.dumps({
                 "contradictions": [
@@ -188,9 +189,9 @@ def _mock_nemotron_response(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             "model": "mock"
         }
     
-    # Literature Agent - check for whole words to avoid matching "research"
+    # Literature Agent - check system prompt for agent identity
     import re
-    if "literature" in last_user_msg.lower() or re.search(r'\bsearch\b', last_user_msg.lower()):
+    if "literature" in last_user_msg.lower() or (re.search(r'\bsearch\b', last_user_msg.lower()) and "literature" in system_msg.lower()):
         return {
             "content": json.dumps({
                 "papers": [
