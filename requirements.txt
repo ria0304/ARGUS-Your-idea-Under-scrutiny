@@ -1,0 +1,38 @@
+# ARGUS - Core Dependencies
+
+# FastAPI backend
+fastapi
+uvicorn[standard]
+pydantic[email]
+
+# RAG & Vector Database
+qdrant_client
+qdrant-fastapi
+psycopg2-binary
+sqlalchemy
+
+# AI / Reasoning
+# Nemotron via Nebius - use open-source nemotron model or nebius SDK
+# requests for API calls
+
+# Embeddings
+sentence-transformers
+bge-m3  # or comparable BGE family
+
+# Document Processing
+pymupdf  # PyMuPDF
+unstructured  # for complex documents
+
+# Web Research
+tavily-python
+
+# Frontend (if using this repo as full stack)
+# React dependencies managed separately
+
+# Utilities
+python-dotenv
+rich
+openai  # for LLM fallback / comparisons
+
+# Optional: Agent orchestration
+# langgraph  # if choosing framework approach
