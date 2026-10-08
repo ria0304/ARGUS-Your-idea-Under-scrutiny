@@ -1,0 +1,140 @@
+/* src/index.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #0d0f1a;
+    --foreground: #e8eaf0;
+    --muted: #7d8592;
+    --card: #161924;
+    --border: #2a2e3b;
+    --accent: #00d4aa;
+    --accent-hover: #00f5c4;
+    --danger: #ff4757;
+    --warning: #ffa502;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    margin: 0;
+    min-height: 100vh;
+  }
+
+  .bg-pattern {
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 170, 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 212, 170, 0.1), transparent);
+  }
+}
+
+@layer utilities {
+  .bg-patterned {
+    background-image: 
+      radial-gradient(ellipse 80% 50% at 50% -20%, rgba(0, 212, 170, 0.15), transparent),
+      radial-gradient(ellipse 60% 40% at 100% 100%, rgba(0, 212, 170, 0.1), transparent);
+  }
+  
+  .glass-panel {
+    background: rgba(22, 25, 36, 0.7);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--border);
+  }
+  
+  .progress-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s ease;
+  }
+  
+  .card-hover:hover {
+    background: var(--card);
+    border-radius: 8px;
+    padding: 8px;
+  }
+  
+  .btn-primary {
+    background: var(--accent);
+    color: var(--background);
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover {
+    background: var(--accent-hover);
+    transform: translateY(-2px);
+  }
+  
+  .btn-secondary {
+    background: transparent;
+    color: var(--text_primary);
+    border: 1px solid var(--border);
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-secondary:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  
+  .input-field {
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text_primary);
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    transition: border-color 0.3s ease;
+  }
+  
+  .input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3 rgba(0, 212, 170, 0.2);
+  }
+  
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  
+  .section-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+  }
+  
+  .mode-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+  
+  .mode-investigate { background: rgba(0, 212, 170, 0.2); color: var(--accent); }
+  .mode-break { background: rgba(255, 71, 87, 0.2); color: var(--danger); }
+  .mode-mirror { background: rgba(0, 100, 200, 0.2); color: #64b5f6; }}
