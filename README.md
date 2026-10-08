@@ -108,7 +108,7 @@ flowchart LR
     MEM -.->|"planned"| PG["PostgreSQL"]
 ```
 
-Solid lines exist in code today. Dashed lines are the integrations that are designed but not connected.
+Solid lines exist in code today. Dashed lines are integrations that are designed but not connected. The API does not currently use the memory backend, so project memory is reachable only from Python.
 
 ---
 
@@ -118,25 +118,26 @@ Solid lines exist in code today. Dashed lines are the integrations that are desi
 
 | Component | File | Status | Notes |
 |---|---|---|---|
-| FastAPI app, routes, request/response models | `apps/api/main.py` | 🟡 | Routes defined; currently fails on startup (see Known Issues) |
+| FastAPI app | `apps/api/main.py` | 🟡 | Starts and serves `/`, `/health`, `/investigate`, `/break-it`, `/mirror`. Results are mostly empty because the agents behind it are stubs |
 | Intake agent | `argus/agents/intake.py` | 🚧 | Models done, `extract()` returns empty fields |
 | Literature agent | `argus/agents/literature.py` | 🚧 | Models done, `search()` returns `[]` |
 | Gap agent | `argus/agents/gap.py` | 🚧 | Models done, analysis is a TODO |
-| Contradiction agent | `argus/agents/contradiction.py` | 🚧 | Models done, search is a TODO |
-| Novelty agent | `argus/agents/novelty.py` | 🟡 | Topic-overlap heuristic, no LLM |
+| Contradiction agent | `argus/agents/contradiction.py` | 🚧 | Models done, `search_contradictions()` returns `[]` |
+| Novelty agent | `argus/agents/novelty.py` | 🟡 | Topic-overlap heuristic, no LLM. Scores are 0–100 |
 | Feasibility agent | `argus/agents/feasibility.py` | 🟡 | Keyword-based scoring, no LLM |
 | Impact agent | `argus/agents/impact.py` | 🟡 | Heuristic scoring |
-| Stress-test agent | `argus/agents/stress_test.py` | 🟡 | Scenario and breakpoint models; fixed severity and confidence |
-| Orchestrator / state graph | `argus/orchestration/graph.py` | 🚧 | `InvestigationState` model is solid; every phase is a TODO stub |
-| RAG engine (retrieve, group evidence) | `argus/rag/engine.py` | 🚧 | Typed evidence models; retrieval is a TODO |
-| Qdrant RAG engine | `argus/rag/qdrant_engine.py` | 🟡 | Qdrant client and BGE-M3 embedding code; not used by the API yet |
+| Stress-test agent | `argus/agents/stress_test.py` | 🟡 | Scenario and breakpoint models; with no assumptions in, it reports "idea appears robust" |
+| Orchestrator / state graph | `argus/orchestration/graph.py` | 🚧 | `InvestigationState` model is solid; phases are stubs. The API only calls `_generate_default_action_plan()` |
+| RAG engine | `argus/rag/engine.py` | 🚧 | Typed evidence models; returns nothing unless a vector DB is passed in, and the API passes none |
+| Qdrant RAG engine | `argus/rag/qdrant_engine.py` | 🟡 | Qdrant client and BGE-M3 embedding code; not used by the API |
 | Evidence and citations | `argus/evidence/sources.py` | ✅ | `Source`, `EvidenceRecord`, `Citation`, `EvidenceManager` |
-| Project memory | `argus/memory/postgres_memory.py` | 🟡 | **In-memory only.** Data is lost on restart; `DATABASE_URL` is read but no DB connection is made |
-| Web UI | `apps/web/argus` | 🟡 | Home, Investigation, Break, Mirror and Dashboard pages |
-| Nemotron call helper | `call_nemotron()` in `main.py` | 🟡 | Written, but no agent calls it |
+| Project memory | `argus/memory/postgres_memory.py` | 🟡 | **In-memory only**, lost on restart. A database URL env var is read but no connection is made. Not exposed through the API |
+| Web UI | `apps/web/argus` | 🟡 | Home, Investigation, Break, Mirror and Dashboard pages. Mirror and Dashboard use hardcoded mock data |
+| Nemotron integration | `apps/api/main.py` | 🚧 | Endpoint and key env vars are read, but no code calls the model |
 | Terminal demo | `hackathon_demo.py` | ✅ | Scripted 3-minute walkthrough, no backend needed |
+| Tests | `tests/test_agents.py` | 🟡 | 11 tests; 6 pass, 5 fail (see Known Issues) |
 
-**Dashboard scores are not yet meaningful.** The six dashboard metrics (novelty, evidence, feasibility, impact, gap, breakpoint) come from the heuristics above or from hardcoded fallback values. Define how each is computed before presenting them as findings.
+**Today the pipeline runs end to end but produces little real analysis.** With no intake, retrieval or LLM, `/investigate` returns empty extraction, zero evidence and no breakpoints. The dashboard metrics come from heuristics or fallback values, so do not present them as findings yet.
 
 ---
 
@@ -159,18 +160,24 @@ uvicorn apps.api.main:app --reload --port 8000
 
 Run from the repository root, not from `apps/api`. Interactive docs are at `http://localhost:8000/docs`.
 
-> The backend will not start until the issues in [Known Issues](#known-issues) are fixed. Items 1–3 there are one-line fixes.
+`requirements.txt` includes heavy packages (`sentence-transformers`, `unstructured`, `pymupdf`). For the current API you only need `fastapi`, `uvicorn`, `pydantic` and `requests`.
+
+### Run the tests
+
+```bash
+pip install pytest httpx
+pytest tests
+```
 
 ### Run the frontend
 
 ```bash
 cd apps/web/argus
 npm install
-npm install react-router-dom   # imported by the app but missing from package.json
 npm run dev
 ```
 
-The Vite config serves the app under the `/argus/` base path. The pages call the API with relative URLs (`/investigate`, `/break-it`), and no dev proxy is configured, so add one to `vite.config.js` pointing at `http://localhost:8000` or change the fetch URLs.
+Vite serves the app under the `/argus/` base path (e.g. `http://localhost:5173/argus/`). The pages call the API with relative URLs (`/investigate`, `/break-it`), and no dev proxy is configured, so add one to `vite.config.js` pointing at `http://localhost:8000` or change the fetch URLs. The app also crashes on load until the router bug in Known Issues is fixed.
 
 ---
 
@@ -180,26 +187,20 @@ All routes are on the FastAPI app (default `http://localhost:8000`).
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/` | Service banner, version, active memory backend |
-| `GET` | `/health` | Liveness and component status |
+| `GET` | `/` | Service banner and version |
+| `GET` | `/health` | Liveness check with timestamp |
 | `POST` | `/investigate` | Run the full pipeline on an idea |
-| `POST` | `/break-it` | Adversarial mode: investigation plus breakpoint detection |
-| `POST` | `/mirror` | Counterfactual scenarios per assumption |
-| `GET` | `/dashboard` | Six dashboard metrics |
-| `POST` | `/memory/create-project` | Create a project |
-| `GET` | `/memory/projects` | List projects |
-| `GET` | `/memory/project/{project_id}` | Fetch one project |
-| `POST` | `/memory/add-assumption` | Add an assumption |
-| `POST` | `/memory/add-breakpoint` | Add a breakpoint |
-| `POST` | `/memory/add-experiment` | Record an experiment |
-| `POST` | `/memory/add-open-question` | Record an open question |
+| `POST` | `/break-it` | Adversarial mode: extract assumptions, stress-test, return breakpoints |
+| `POST` | `/mirror` | Best / expected / failure scenarios. **Currently returns fixed template text**, not analysis of your idea |
+
+The memory routes (`/memory/*`) and `/dashboard` that earlier versions described no longer exist. Dashboard values are returned inside the `/investigate` response under `data`.
 
 **Example**
 
 ```bash
 curl -X POST http://localhost:8000/investigate \
   -H "Content-Type: application/json" \
-  -d '{"idea": "An efficient multimodal model for misinformation detection", "mode": "investigate", "use_tavily": false}'
+  -d '{"idea": "An efficient multimodal model for misinformation detection"}'
 ```
 
 Request body (`InvestigateRequest`):
@@ -208,8 +209,10 @@ Request body (`InvestigateRequest`):
 |---|---|---|---|
 | `idea` | string | required | The idea, claim or proposal |
 | `mode` | string | `"investigate"` | `investigate`, `break` or `mirror` |
-| `use_tavily` | bool | `true` | Use live web research (not yet implemented) |
-| `create_project` | bool | `true` | Save the run to project memory |
+| `use_tavily` | bool | `true` | Accepted but ignored; web research is not implemented |
+| `create_project` | bool | `true` | Accepted but ignored; the API does not write to memory |
+
+Responses use the envelope `{investigation_id, mode, status, message, data}`.
 
 ---
 
@@ -217,8 +220,8 @@ Request body (`InvestigateRequest`):
 
 | Variable | Used by | Description |
 |---|---|---|
-| `NEMOTRON_ENDPOINT` | `main.py` | Chat-completions URL. Defaults to `https://api.nebius.com/v1/chat/completions` |
-| `NEMOTRON_API_KEY` | `main.py` | Nebius API key. Defaults to a placeholder `demo-key` |
+| `NEMOTRON_ENDPOINT` | `main.py` | Chat-completions URL. Defaults to `https://api.nebius.com/v1/chat/completions`. Read but not yet used |
+| `NEMOTRON_API_KEY` | `main.py` | Nebius API key. Defaults to a placeholder `demo-key`. Read but not yet used |
 | `NEBIUS_DB_URL` / `POSTGRES_URL` / `DATABASE_URL` | memory backend | Read at startup; storage is still in-memory |
 
 Qdrant settings (`qdrant_url`, `qdrant_api_key`, embedding model `BAAI/bge-m3`, collection `argus_evidence`) are constructor arguments on `QdrantRAGEngine` rather than environment variables. A `TAVILY_API_KEY` will be needed once web research is added.
@@ -231,7 +234,7 @@ Qdrant settings (`qdrant_url`, `qdrant_api_key`, embedding model `BAAI/bge-m3`, 
 ARGUS/
 ├── apps/
 │   ├── api/
-│   │   └── main.py                 # FastAPI app: investigate, break-it, mirror, memory, dashboard
+│   │   └── main.py                 # FastAPI app: health, investigate, break-it, mirror
 │   └── web/argus/                  # React + Vite + Tailwind frontend
 │       └── src/
 │           ├── App.jsx             # Shell, routing, mode switching
@@ -244,6 +247,7 @@ ARGUS/
 │   ├── rag/                        # engine.py (evidence models) · qdrant_engine.py
 │   ├── evidence/sources.py         # Source, EvidenceRecord, Citation, EvidenceManager
 │   └── memory/                     # postgres_memory.py · memory_agent.py
+├── tests/test_agents.py            # pytest suite
 ├── hackathon_demo.py               # Scripted terminal demo
 └── requirements.txt
 ```
@@ -252,19 +256,18 @@ ARGUS/
 
 ## Known Issues
 
-Verified by importing the code. Fix these first.
+Verified by running the code and tests.
 
-1. **API does not start.** `ContradictionAgent()` in `main.py` is constructed with no arguments, but its `__init__` requires `evidence_store` and `rag_engine`.
-2. **Missing names in `main.py`.** `Orchestrator` is used but never imported, and `stress_agent` is used but never created (`StressTestAgent` is imported, not instantiated).
-3. **Typo in `/break-it`.** It calls `investiate(...)` instead of `investigate(...)`.
-4. **`/dashboard` awaits a synchronous function.** `await memory_backend.get_all_projects()` will raise, because the method is not async. It also falls back to hardcoded scores.
-5. **`argus/__init__.py` exports names that do not exist** (`QdrantRAGEngine`, `PostgresMemoryBackend`), so `from argus import *` fails.
-6. **Score scales are inconsistent.** Some agents return 0–1, some 0–100, and the dashboard model documents 0–10, but `main.py` mixes multipliers.
-7. **`requirements.txt`** lists `bge-m3` and `qdrant-fastapi`, which are not valid pip packages for this use. Load BGE-M3 through `sentence-transformers`. No versions are pinned, and `requests` is used but not listed.
-8. **Frontend dependency gap.** `react-router-dom` is imported but not in `package.json`, and `App.jsx` calls `useNavigate()` outside its `<Router>`.
+1. **Frontend crashes on load.** `App.jsx` calls `useNavigate()` in the `App` component, but `<Router>` is rendered inside it. The hook must be called below the router, e.g. by wrapping `<App />` in `<BrowserRouter>` in `main.jsx`.
+2. **Novelty score scale bug.** `NoveltyAgent` already returns 0–100, but `/investigate` multiplies it by 100 again in `data.novelty.score` (a 30 becomes 3000) and by 10 in the dashboard value. Other metrics mix 0–1, 0–10 and 0–100 the same way.
+3. **Five failing tests.** `test_all_agents_importable` builds `ContradictionAgent()` without its required arguments. The novelty, feasibility and impact tests construct models without their now-required fields. `test_memory_backend_basic` expects an integer open-question id but gets the string `"0"`.
+4. **Mirror is canned.** `/mirror` returns the same three scenarios and "+10-12%" style outcomes for any idea. The Mirror page and the Dashboard page also use hardcoded mock data.
+5. **Request flags are ignored.** `use_tavily` and `create_project` have no effect, and no route reads or writes project memory.
+6. **Duplicate agent construction.** `/investigate` re-creates several agents inside the handler, shadowing the module-level ones.
+7. **`argus/__init__.py` exports names that do not exist** (`QdrantRAGEngine`, `PostgresMemoryBackend` are not imported), so `from argus import *` fails.
+8. **`requirements.txt`** lists `bge-m3` and `qdrant-fastapi`, which are not valid pip packages for this use. Load BGE-M3 through `sentence-transformers`. No versions are pinned, and `requests`, `pytest` and `httpx` are not listed.
 9. **CORS is `allow_origins=["*"]` with `allow_credentials=True`.** Restrict origins before any deployment.
-10. **Memory is volatile.** All projects are lost on restart, and project IDs use Python's per-process `hash()`.
-11. **No tests.**
+10. **Memory is volatile.** All projects are lost on restart, and project IDs are derived from Python's per-process `hash()`.
 
 ---
 
@@ -272,13 +275,13 @@ Verified by importing the code. Fix these first.
 
 | Priority | Item |
 |---|---|
-| 1 | Fix the startup bugs above and add a smoke test that boots the app |
+| 1 | Fix the frontend router crash, the score scales and the failing tests; keep a smoke test that boots the app |
 | 2 | Implement `IntakeAgent.extract()` with Nemotron (structured JSON output) |
 | 3 | Connect `RAGEngine` to `QdrantRAGEngine` and add Tavily search to the literature agent |
 | 4 | Implement contradiction search (Query A "what supports this?" vs Query B "what contradicts this?") |
 | 5 | Drive the stress-test from retrieved counter-evidence instead of fixed severity |
-| 6 | Wire `Orchestrator` to the real agents and use it from the API |
-| 7 | Persist memory in PostgreSQL |
+| 6 | Wire `Orchestrator` to the real agents and use it from the API; make `/mirror` analyse the actual idea |
+| 7 | Persist memory in PostgreSQL and expose it through the API again |
 | 8 | Define a scoring method for each dashboard metric |
 | 9 | PDF upload and ingestion, plus report export with citations and an agent trace |
 | 10 | Evaluation set of ideas with known outcomes, the honest way to measure whether BREAK finds real failures |
@@ -290,7 +293,7 @@ Verified by importing the code. Fix these first.
 ## Tech Stack
 
 - **Backend:** FastAPI, Pydantic, Uvicorn
-- **Frontend:** React 19, Vite, Tailwind CSS, react-router-dom
+- **Frontend:** React 19, Vite, Tailwind CSS 4, react-router-dom 7
 - **Reasoning:** NVIDIA Nemotron via Nebius AI Cloud (OpenAI-style chat endpoint)
 - **Retrieval:** Qdrant, BGE-M3 via sentence-transformers
 - **Web research:** Tavily
