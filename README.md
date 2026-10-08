@@ -267,35 +267,92 @@ Responses use the envelope `{investigation_id, mode, status, message, data}`.
 
 ## Project Structure
 
+Generated from the repository itself. `node_modules/`, `.git/` and `__pycache__/` are omitted.
+
 ```
 ARGUS/
+├── .gitignore
+├── README.md
+├── requirements.txt                     # Python dependencies (pinned)
+├── hackathon_demo.py                    # Scripted terminal demo, no backend needed
+├── ingest_evidence.py                   # Seeds Qdrant with 12 sample evidence items
+├── test_smoke.py                        # API smoke tests (httpx, pytest-asyncio)
+│
 ├── apps/
-│   ├── api/main.py                 # FastAPI app and pipeline handlers
-│   └── web/argus/                  # React + Vite + Tailwind frontend
-│       └── src/
-│           ├── App.jsx             # Shell, routing, mode switching
-│           ├── pages/              # home · investigation · break · mirror · dashboard
-│           └── components/         # common/ModeToggle · dashboard/DashboardSummary
-├── argus/                          # Core Python package
-│   ├── agents/                     # intake · literature · gap · novelty · contradiction
-│   │                               # feasibility · impact · stress_test
-│   ├── llm/nemotron.py             # LLM client + mock fallback
-│   ├── orchestration/graph.py      # InvestigationState + stub Orchestrator
-│   ├── rag/                        # engine.py (evidence models) · qdrant_engine.py
-│   ├── evidence/sources.py         # Source, EvidenceRecord, Citation, EvidenceManager
-│   └── memory/                     # postgres_memory.py · memory_agent.py
-├── tests/test_agents.py            # pytest suite
-├── test_smoke.py                   # API smoke tests (httpx)
-├── ingest_evidence.py              # Seeds Qdrant with 12 sample items
-├── hackathon_demo.py               # Scripted terminal demo
-└── requirements.txt
+│   ├── api/
+│   │   └── main.py                      # FastAPI app: routes + pipeline handlers
+│   └── web/
+│       └── argus/                       # React + Vite + Tailwind frontend
+│           ├── .gitignore
+│           ├── .oxlintrc.json           # Linter config
+│           ├── README.md                # Vite template readme
+│           ├── index.html
+│           ├── package.json
+│           ├── package-lock.json
+│           ├── postcss.config.cjs
+│           ├── tailwind.config.js
+│           ├── vite.config.js           # base: "/argus/", no API proxy
+│           ├── public/
+│           │   ├── favicon.svg
+│           │   └── icons.svg
+│           └── src/
+│               ├── main.jsx             # React entry point
+│               ├── App.jsx              # Shell, routing, mode switching
+│               ├── App.css
+│               ├── index.css
+│               ├── assets/
+│               │   ├── hero.png
+│               │   ├── react.svg
+│               │   └── vite.svg
+│               ├── components/
+│               │   ├── utils.js
+│               │   ├── common/
+│               │   │   ├── ModeToggle.jsx
+│               │   │   ├── styles.js
+│               │   │   └── utils.js
+│               │   └── dashboard/
+│               │       └── DashboardSummary.jsx
+│               └── pages/
+│                   ├── home.jsx         # Idea input, calls /investigate
+│                   ├── investigation.jsx
+│                   ├── break.jsx        # Calls /break-it
+│                   ├── mirror.jsx       # Uses locally generated sample scenarios
+│                   └── dashboard.jsx    # Uses mock data
+│
+├── argus/                               # Core Python package
+│   ├── __init__.py                      # Re-exports agents, RAG, memory, orchestrator
+│   ├── agents/
+│   │   ├── intake.py                    # Goal, domain, claims, ranked assumptions
+│   │   ├── literature.py                # Related-work search over the vector store
+│   │   ├── gap.py                       # Research gaps and gap confidence
+│   │   ├── novelty.py                   # Topic-overlap novelty heuristic
+│   │   ├── contradiction.py             # Supporting vs contradicting evidence
+│   │   ├── feasibility.py               # Data, compute, complexity, reproducibility
+│   │   ├── impact.py                    # Significance and beneficiaries
+│   │   └── stress_test.py               # Scenarios and breakpoints (#BREAK_IT)
+│   ├── llm/
+│   │   ├── __init__.py
+│   │   └── nemotron.py                  # Nemotron/Nebius client + mock fallback
+│   ├── orchestration/
+│   │   └── graph.py                     # InvestigationState + stub Orchestrator
+│   ├── rag/
+│   │   ├── engine.py                    # Evidence models (EvidenceItem, EvidenceGroup)
+│   │   └── qdrant_engine.py             # Qdrant client + sentence-transformers embeddings
+│   ├── evidence/
+│   │   └── sources.py                   # Source, EvidenceRecord, Citation, EvidenceManager
+│   └── memory/
+│       ├── postgres_memory.py           # MemoryBackend (in-memory today)
+│       └── memory_agent.py              # ProjectMemory + MemoryAgent. SyntaxError, not imported anywhere
+│
+└── tests/
+    └── test_agents.py                   # Agent and memory unit tests
 ```
 
 ---
 
 ## Known Issues
 
-Items 1 to 8 were verified by running the code or tests. Items 9 and 10 come from reading the code; the frontend was not built or run.
+Items 1 to 8 and 11 were verified by running the code or tests. Items 9 and 10 come from reading the code; the frontend was not built or run.
 
 1. **Mock mode ignores your input.** Without an API key the LLM client returns the same misinformation-themed output for every idea, including fake paper citations. Nothing in the API response tells you the output is mocked.
 2. **Five failing tests** (12 of 17 pass). `test_all_agents_importable` builds `ContradictionAgent()` without its required arguments. The novelty, feasibility and impact tests construct models without their now-required fields. `test_memory_backend_basic` expects an integer open-question id but gets the string `"0"`.
@@ -307,6 +364,7 @@ Items 1 to 8 were verified by running the code or tests. Items 9 and 10 come fro
 8. **Memory is volatile.** All projects are lost on restart, and project IDs come from Python's per-process `hash()`.
 9. **Frontend probably crashes on load.** `App.jsx` calls `useNavigate()` in the `App` component while `<Router>` is rendered inside it, and `main.jsx` uses `React.StrictMode` without importing `React`. The Dashboard page uses mock data (`generateMockDashboard`).
 10. **No frontend-to-API wiring.** Relative fetch URLs plus no Vite proxy means calls do not reach port 8000 in development.
+11. **`argus/memory/memory_agent.py` has a syntax error.** Line 13 reads `Field(description "...")` with a missing `=`, and the same pattern repeats in that class. Nothing imports the module, so the app and tests don't notice. `py_compile` fails on it, and it is the only file in the repo that does.
 
 Fixed since the last README: the CORS wildcard with credentials (now two localhost origins, no credentials), the `argus/__init__.py` broken exports, the novelty ×100 scaling in `/investigate`, the duplicate agent construction inside the handler, and the invalid `bge-m3` / `qdrant-fastapi` entries in `requirements.txt`.
 
@@ -318,7 +376,7 @@ Fixed since the last README: the CORS wildcard with credentials (now two localho
 |---|---|
 | 1 | Make mock mode visible: add a `mock: true` flag to every response and log a warning, so nobody mistakes demo output for analysis |
 | 2 | Fix the frontend router and React import bugs, add a Vite proxy, and add a test that boots the UI |
-| 3 | Fix the five failing tests and keep `pytest` green |
+| 3 | Fix the five failing tests and the syntax error in `memory_agent.py`; keep `pytest` green |
 | 4 | Run the pipeline against a real Nemotron endpoint and record where structured-JSON parsing fails |
 | 5 | Replace the sample corpus with real, verifiable sources. Every cited paper needs a retrievable link |
 | 6 | Add Tavily search to the literature agent and honour `use_tavily` |
