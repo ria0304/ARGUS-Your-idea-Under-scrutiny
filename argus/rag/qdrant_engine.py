@@ -136,6 +136,8 @@ class QdrantRAGEngine:
                 "year": evidence.get("year"),
                 "author": evidence.get("author"),
                 "page": evidence.get("page"),
+                "topics": evidence.get("topics", []),
+                "venue": evidence.get("venue", "Unknown"),
             }
             
             if source_ids and i < len(source_ids):

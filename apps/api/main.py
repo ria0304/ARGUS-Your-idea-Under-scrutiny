@@ -212,12 +212,12 @@ async def investigate(request: InvestigateRequest):
                 for c in contradictions[:5]
             ],
             "feasibility": {
-                "score": min(max(feasibility.overall_score * 100 if feasibility else 50.0, 0), 100),
+                "score": min(max(feasibility.overall_score if feasibility else 50.0, 0), 100),
                 "bottlenecks": feasibility.bottlenecks if feasibility else [],
                 "verdict": feasibility.verdict if feasibility else "unknown"
             },
             "impact": {
-                "score": min(max(impact.overall_score * 10 if impact else 50.0, 0), 100),
+                "score": min(max(impact.overall_score if impact else 50.0, 0), 100),
                 "beneficiaries": impact.key_beneficiaries if impact else [],
                 "recommendation": impact.recommendation if impact else "moderate"
             },

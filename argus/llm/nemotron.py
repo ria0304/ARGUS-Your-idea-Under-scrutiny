@@ -152,16 +152,50 @@ def _mock_nemotron_response(messages: List[Dict[str, str]]) -> Dict[str, Any]:
             "usage": {"prompt_tokens": 140, "completion_tokens": 300, "total_tokens": 440},
             "model": "mock"
         }
-    
-    # Contradiction Agent
-    if ("contradict" in last_user_msg.lower() or "counterevidence" in last_user_msg.lower() or 
-        ("search" in last_user_msg.lower() and "contradiction" in system_msg.lower())):
+
+    # Literature Agent - Paper Classification
+    if "classify" in last_user_msg.lower() or ("papers to classify" in last_user_msg.lower() and "literature" in system_msg.lower()):
+        return {
+            "content": json.dumps({
+                "papers": [
+                    {"title": "CLIP-based Multimodal Misinformation Detection", "authors": ["Smith et al."], "year": 2023, "venue": "ICML", "abstract": "CLIP-based multimodal model for misinformation detection...", "topics": ["multimodal", "misinformation", "CLIP"], "relevance": "baseline", "relevance_score": 0.85},
+                    {"title": "Efficient Transformers for Fake News Detection", "authors": ["Chen et al."], "year": 2024, "venue": "ACL", "abstract": "Lightweight transformer architecture...", "topics": ["efficient", "transformer", "fake-news"], "relevance": "extension", "relevance_score": 0.78},
+                    {"title": "Cross-Modal Consistency for Misinformation", "authors": ["Lee et al."], "year": 2023, "venue": "CVPR", "abstract": "Cross-modal consistency checking...", "topics": ["cross-modal", "consistency", "misinformation"], "relevance": "counterpoint", "relevance_score": 0.82},
+                    {"title": "Limitations of Multimodal Models under Distribution Shift", "authors": ["Gupta et al."], "year": 2024, "venue": "ICLR", "abstract": "Multimodal models more vulnerable to distribution shift...", "topics": ["distribution shift", "domain adaptation", "multimodal"], "relevance": "counterpoint", "relevance_score": 0.88},
+                    {"title": "Unimodal Baselines Are Stronger Than You Think", "authors": ["Thompson et al."], "year": 2023, "venue": "ACL", "abstract": "Text-only baselines match multimodal...", "topics": ["unimodal baselines", "reproducibility", "multimodal"], "relevance": "counterpoint", "relevance_score": 0.92}
+                ]
+            }),
+            "usage": {"prompt_tokens": 150, "completion_tokens": 300, "total_tokens": 450},
+            "model": "mock"
+        }
+
+    # Contradiction Agent - Search Queries
+    if ("generate search queries" in last_user_msg.lower() or "search queries" in last_user_msg.lower()) and "contradiction" in system_msg.lower():
+        return {
+            "content": json.dumps({
+                "supporting_queries": [
+                    "evidence supporting multimodal misinformation detection accuracy",
+                    "multimodal model accuracy misinformation detection",
+                    "cross-modal consistency misinformation detection"
+                ],
+                "contradicting_queries": [
+                    "limitations of multimodal misinformation detection accuracy",
+                    "evidence against multimodal model accuracy",
+                    "failure cases multimodal misinformation detection"
+                ]
+            }),
+            "usage": {"prompt_tokens": 130, "completion_tokens": 280, "total_tokens": 410},
+            "model": "mock"
+        }
+
+    # Contradiction Agent - Evaluation
+    if ("evidence to evaluate" in last_user_msg.lower() or "evaluate evidence" in last_user_msg.lower()) and "contradiction" in system_msg.lower():
         return {
             "content": json.dumps({
                 "contradictions": [
-                    {"claim": "Multimodal always improves over unimodal", "evidence": "Study shows text-only matches multimodal when images are irrelevant", "strength": "moderate"},
-                    {"claim": "Efficient models maintain accuracy", "evidence": "Distillation often degrades performance on out-of-distribution data", "strength": "high"},
-                    {"claim": "Cross-dataset generalization is achievable", "evidence": "Domain shift causes >15% accuracy drop in multimodal models", "strength": "high"}
+                    {"claim": "Multimodal always improves over unimodal", "evidence": "Study shows text-only matches multimodal when images are irrelevant", "source": "Chen et al. 2024", "strength": 0.75, "context": "Social media posts with stock photos"},
+                    {"claim": "Efficient models maintain accuracy", "evidence": "Distillation often degrades performance on out-of-distribution data", "source": "Liu et al. 2023", "strength": 0.85, "context": "Domain shift evaluation on misinformation datasets"},
+                    {"claim": "Cross-dataset generalization is achievable", "evidence": "Domain shift causes >15% accuracy drop in multimodal models", "source": "Gupta et al. 2024", "strength": 0.9, "context": "Cross-platform misinformation detection"}
                 ]
             }),
             "usage": {"prompt_tokens": 130, "completion_tokens": 280, "total_tokens": 410},
@@ -226,6 +260,41 @@ def _mock_nemotron_response(messages: List[Dict[str, str]]) -> Dict[str, Any]:
                 "evaluation": "Accuracy, F1, latency, cross-dataset generalization"
             }),
             "usage": {"prompt_tokens": 100, "completion_tokens": 200, "total_tokens": 300},
+            "model": "mock"
+        }
+
+    # Feasibility Agent
+    if "assess feasibility" in last_user_msg.lower() and "feasibility" in system_msg.lower():
+        return {
+            "content": json.dumps({
+                "overall_score": 68.0,
+                "dataset_availability": 75.0,
+                "compute_requirements": 60.0,
+                "implementation_complexity": 55.0,
+                "evaluation_difficulty": 70.0,
+                "reproducibility": 50.0,
+                "deployment_feasibility": 65.0,
+                "bottlenecks": ["Dataset availability (paired data needed)", "Implementation complexity (multimodal fusion)", "Reproducibility (closed-source baselines)"],
+                "verdict": "caution"
+            }),
+            "usage": {"prompt_tokens": 140, "completion_tokens": 300, "total_tokens": 440},
+            "model": "mock"
+        }
+
+    # Impact Agent
+    if "assess impact" in last_user_msg.lower() and "impact" in system_msg.lower():
+        return {
+            "content": json.dumps({
+                "overall_score": 78.0,
+                "significance": 85.0,
+                "beneficiaries_score": 82.0,
+                "domain_impact": 80.0,
+                "external_impact": 75.0,
+                "ethical_considerations": 65.0,
+                "recommendation": "high",
+                "key_beneficiaries": ["social media users", "platforms", "society", "researchers", "journalists", "fact-checkers"]
+            }),
+            "usage": {"prompt_tokens": 130, "completion_tokens": 280, "total_tokens": 410},
             "model": "mock"
         }
     
